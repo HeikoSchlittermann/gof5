@@ -166,7 +166,9 @@ func readConfig() (*Config, error) {
 		}
 	}
 
+	// Default config options, will be overwritten by the config
 	var config Config
+
 	// read config file
 	// if config doesn't exist, use defaults
 	if raw, err := ioutil.ReadFile(path.Join(configPath, configName)); err == nil {
@@ -178,13 +180,18 @@ func readConfig() (*Config, error) {
 		log.Printf("Routes through VPN are not set, please set the routes in the config")
 	}
 
-	// set default driver
 	if config.Driver == "" {
 		config.Driver = "wireguard"
 	}
-
 	if !strSliceContains(supportedDrivers, config.Driver) {
 		return nil, fmt.Errorf("%q driver is unsupported, supported drivers are: %q", config.Driver, supportedDrivers)
+	}
+
+	if config.ResolvConfHandler == "" {
+		config.ResolvConfHandler = "writeOnce"
+	}
+	if !strSliceContains(supportedRCHandlers, config.ResolvConfHandler) {
+		return nil, fmt.Errorf("%q handler for resolv.conf is unsupported, supported handlers are: %q", config.ResolvConfHandler, supportedRCHandlers)
 	}
 
 	if !config.DisableDNS {

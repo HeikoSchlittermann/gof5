@@ -3,6 +3,9 @@ github.com/chzyer/readline
 # github.com/creack/pty v1.1.12-0.20200804180658-a6c0a376f1d0
 ## explicit
 github.com/creack/pty
+# github.com/fsnotify/fsnotify v1.4.9
+## explicit
+github.com/fsnotify/fsnotify
 # github.com/howeyc/gopass v0.0.0-20190910152052-7cb4b85ec19c
 ## explicit
 github.com/howeyc/gopass

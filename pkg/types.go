@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	debug            bool
-	supportedDrivers = []string{"wireguard", "water", "pppd"}
+	debug               bool
+	supportedDrivers    = []string{"wireguard", "water", "pppd"}
+	supportedRCHandlers = []string{"writeOnce", "watch"}
 )
 
 func SetDebug(d bool) {
@@ -144,6 +145,12 @@ type Config struct {
 	// list of DNS local servers
 	// when list is empty, parsed from /etc/resolv.conf
 	DNSServers []net.IP `yaml:"-"`
+	// How to handle resolve.conf
+	// - writeOnce (this is the default)
+	// - watch (using fsnotify)
+	// - resolvconf (to be implemented)
+	// - network-manager (to be implemented)
+	ResolvConfHandler string `yaml:"resolvConfHandler"`
 	// internal parameters
 	// current user or sudo user
 	user *user.User

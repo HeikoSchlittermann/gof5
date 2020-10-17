@@ -9,7 +9,11 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	"github.com/fsnotify/fsnotify"
 )
+
+var watching chan struct{}
 
 func configureDNS(config *Config) error {
 	dns := bytes.NewBufferString(fmt.Sprintf("# created by gof5 VPN client (PID %d)\n", os.Getpid()))
@@ -31,22 +35,90 @@ func configureDNS(config *Config) error {
 			return fmt.Errorf("failed to write search DNS entry into buffer: %s", err)
 		}
 	}
-	if err := ioutil.WriteFile(resolvPath, dns.Bytes(), 0644); err != nil {
-		return fmt.Errorf("failed to write %s: %s", resolvPath, err)
+
+	switch config.ResolvConfHandler {
+	case "watch":
+		watching = make(chan struct{})
+		if err := watchResolvConf(resolvPath, dns.Bytes(), watching); err != nil {
+			return fmt.Errorf("can't watch %s: %s", resolvPath, err)
+		}
+
+	case "writeOnce":
+		if err := ioutil.WriteFile(resolvPath, dns.Bytes(), 0666); err != nil {
+			return fmt.Errorf("failed to write %s: %s", resolvPath, err)
+		}
+	default:
+		panic("unsupported resolvConfHandler")
 	}
 
 	return nil
 }
 
 func restoreDNS(config *Config) {
-	log.Printf("Restoring original %s", resolvPath)
 	if config.resolvConf == nil {
-		if err := os.Remove(resolvPath); err != nil {
-			log.Println(err)
-		}
 		return
 	}
+	if watching != nil {
+		close(watching)
+	}
+	log.Printf("Restoring original %s", resolvPath)
 	if err := ioutil.WriteFile(resolvPath, config.resolvConf, 0666); err != nil {
 		log.Printf("Failed to restore %s: %s", resolvPath, err)
 	}
+}
+
+func watchResolvConf(path string, data []byte, stop <-chan struct{}) error {
+	var watcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+
+	if err = watcher.Add(path); err != nil {
+		return err
+	}
+
+	go func() {
+		defer watcher.Close()
+		defer func() { app.exit <- true }()
+		for {
+
+			rc, err := ioutil.ReadFile(path)
+			if os.IsNotExist(err) { // recreate and update watcher if missing
+				if fi, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644); err != nil {
+					log.Printf("failed to create %s: %s", path, err)
+					return
+				} else {
+					if err := watcher.Add(path); err != nil {
+						log.Printf("failed to add watcher for %s: %s", path, err)
+						return
+					}
+					fi.Close()
+				}
+			}
+
+			if bytes.Compare(rc, data) != 0 {
+				if err := ioutil.WriteFile(path, data, 0666); err != nil {
+					log.Printf("failed to write %s: %s", path, err)
+					return
+				}
+			}
+
+			select {
+			case <-stop:
+				return
+			case _, ok := <-watcher.Events:
+				if !ok {
+					log.Printf("watcher: can't watch %s anymore", path)
+					return
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					log.Printf("watcher: can't watch %s anymore", path)
+					return
+				}
+				log.Printf("watcher: %s", err)
+			}
+		}
+	}()
+	return err
 }
