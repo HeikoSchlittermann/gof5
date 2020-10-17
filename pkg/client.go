@@ -33,6 +33,12 @@ const (
 	androidUserAgent = "Mozilla/5.0 (Linux; Android 10; SM-G975F Build/QP1A.190711.020) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/81.0.4044.138 Mobile Safari/537.36 EdgeClient/3.0.7 F5Access/3.0.7"
 )
 
+var app = struct {
+	exit chan bool
+}{
+	exit: make(chan bool),
+}
+
 func checkRedirect(c *http.Client) func(*http.Request, []*http.Request) error {
 	return func(req *http.Request, via []*http.Request) error {
 		if req.URL.Path == "/my.logout.php3" || req.URL.Path == "/vdesk/hangup.php3" || req.URL.Query().Get("errorcode") != "" {
@@ -552,7 +558,10 @@ func Connect(server, username, password, sessionID string, closeSession, sel boo
 	}
 
 	signal.Notify(link.termChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGPIPE, syscall.SIGHUP)
-	<-link.termChan
+	select {
+	case <-link.termChan:
+	case <-app.exit:
+	}
 
 	link.restoreConfig(config)
 

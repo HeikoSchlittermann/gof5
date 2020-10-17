@@ -78,4 +78,8 @@ dnsServers:
 routes:
 - 1.2.3.4
 - 1.2.3.5/32
+# how to handle the resolv.conf
+# - writeOnce (default)
+# - watch (use fsnotify to detect changes and revert them)
+resolvConfHandler: writeOnce
 ```
